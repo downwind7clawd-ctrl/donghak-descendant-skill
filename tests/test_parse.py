@@ -3,7 +3,16 @@ import shutil
 import tempfile
 import unittest
 
-from donghak import extract_records, detect_total_pages, filter_records, fetch_page
+from donghak import (
+    extract_records,
+    detect_total_pages,
+    filter_records,
+    fetch_page,
+    annotate_generation,
+    group_by_generation,
+    scan_corpus,
+    Participant,
+)
 
 HERE = os.path.dirname(__file__)
 HTML = open(os.path.join(HERE, "sample_page.html"), encoding="utf-8").read()
@@ -35,6 +44,39 @@ class TestParse(unittest.TestCase):
         baek = [r for r in recs if r.name_kr.startswith("백")]
         self.assertEqual(len(baek), 2)
         self.assertNotIn("김이순", [r.name_kr for r in baek])
+
+
+class TestLineage(unittest.TestCase):
+    GEN = ["남", "기", "규", "형", "흠", "인", "낙", "창"]
+
+    def test_annotate_generation(self):
+        recs = [Participant("백형수", "白亨秀"), Participant("백도홍", "白道弘")]
+        annotate_generation(recs, self.GEN)
+        self.assertEqual(recs[0].generation, "형")
+        self.assertEqual(recs[0].gen_index, 3)
+        self.assertEqual(recs[1].generation, "")
+
+    def test_group_by_generation(self):
+        recs = [Participant("백형수", "白亨秀"), Participant("백도홍", "白道弘")]
+        annotate_generation(recs, self.GEN)
+        grp = group_by_generation(recs, self.GEN)
+        self.assertIn("형", grp)
+        self.assertEqual([r.name_kr for r in grp["형"]], ["백형수"])
+
+
+class TestLiterature(unittest.TestCase):
+    def test_scan_corpus(self):
+        d = tempfile.mkdtemp()
+        try:
+            with open(os.path.join(d, "paper.txt"), "w", encoding="utf-8") as f:
+                f.write("기록에는 백도홍 白道弘 이 참여했다. 다른 사람 김철수 金鐵秀 도 있다.")
+            recs = scan_corpus(d, "백")
+            names = [r.name_kr for r in recs]
+            self.assertIn("백도홍", names)
+            self.assertNotIn("김철수", names)
+            self.assertTrue(all(r.source == "문헌" for r in recs))
+        finally:
+            shutil.rmtree(d)
 
 
 class TestFetch(unittest.TestCase):

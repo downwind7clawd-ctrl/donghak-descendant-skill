@@ -3,21 +3,35 @@
     "surname": "백",
     "region_keywords": ["거창", "경남", "경상", "함안", "합천", "산청", "창녕", "의령", "밀양", "거제", "통영", "고성", "남해", "하동", "진주"],
     "generations": ["남", "기", "규", "형", "흠", "인", "낙", "창"],
+    "lineage_note": "⚠ 아래 generations는 예시(미확정)입니다. 실제 수원백씨 항렬 순환표는 종중 족보에서 확인 후 교체하세요. (다비드 33세 형/亨 돌림은 본인 확인됨)",
+    "branches": {
+      "정신재공파": {"region_hint": "경남 거창 도평리"},
+      "기타": {}
+    },
     "scale": "rare"
   },
   "경주이씨": {
     "surname": "이",
     "region_keywords": ["경주", "성주", "경상", "영남"],
+    "generations": [],
+    "lineage_note": "항렬 순환표 미입력 — 종중 족보에서 확인 후 채우세요.",
+    "branches": {},
     "scale": "common"
   },
   "김해김씨": {
     "surname": "김",
     "region_keywords": ["김해", "밀양", "경남"],
+    "generations": [],
+    "lineage_note": "항렬 순환표 미입력 — 종중 족보에서 확인 후 채우세요.",
+    "branches": {},
     "scale": "common"
   },
   "초계변씨": {
     "surname": "변",
     "region_keywords": ["초계", "거창", "경남"],
+    "generations": [],
+    "lineage_note": "항렬 순환표 미입력 — 종중 족보에서 확인 후 채우세요.",
+    "branches": {},
     "scale": "mid"
   }
 }
