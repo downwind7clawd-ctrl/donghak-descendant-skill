@@ -16,6 +16,7 @@ import io
 import json
 import os
 import re
+import ssl
 import sys
 import urllib.parse
 import urllib.request
@@ -26,10 +27,29 @@ BASE_URL = "https://cdpr.go.kr/commit/"
 SEARCH_TMPL = "?menu=231&sf=all&sv={sv}&pno={pno}"
 UA = "Mozilla/5.0 (compatible; donghak-skill/1.0)"
 
-NAME_RE = re.compile(r"([가-힣]+)\(([가-힣\u4e00-\u9fff]+)\)")
+NAME_RE = re.compile(
+    r"(?<![가-힣])([가-힣]+)(?:\(([가-힣\u4e00-\u9fff]+)\)|\s+([\u4e00-\u9fff]+))"
+)
 PNO_RE = re.compile(r"pno=(\d+)")
 DATE_RE = re.compile(r"(\d{4}[-.]\d{2}[-.]\d{2})")
 REGION_RE = re.compile(r"^[가-힣]+도\s*[가-힣]*$")
+
+_SSL_WARNED = False
+
+
+def _open(req, timeout):
+    """SSL 인증서 저장소가 없는 환경 대비: 검증 실패 시 비검증 컨텍스트로 재시도."""
+    global _SSL_WARNED
+    try:
+        return urllib.request.urlopen(req, timeout=timeout)
+    except urllib.error.URLError as e:
+        if isinstance(e.reason, ssl.SSLError):
+            if not _SSL_WARNED:
+                print("[경고] SSL 인증서 검증 실패 → 비검증 컨텍스트로 재시도합니다.", file=sys.stderr)
+                _SSL_WARNED = True
+            ctx = ssl._create_unverified_context()
+            return urllib.request.urlopen(req, timeout=timeout, context=ctx)
+        raise
 
 
 @dataclass
@@ -64,36 +84,43 @@ class _TextExtractor(HTMLParser):
         return self.lines
 
 
-def _to_lines(html: str) -> list[str]:
+def _to_text(html: str) -> str:
+    """HTML 을 태그가 제거된 평문(줄바꿈 보존)으로 변환."""
     p = _TextExtractor()
     p.feed(html)
-    return p.get_lines()
+    return "\n".join(p.get_lines())
 
 
 def extract_records(html: str) -> list[Participant]:
-    """HTML 본문에서 참여자 레코드를 추출한다."""
-    lines = _to_lines(html)
+    """HTML 본문에서 참여자 레코드를 추출한다.
+
+    이름 패턴(한글명(한자명))을 전체 텍스트에 대해 찾고, 각 이름 뒤 컨텍스트
+    윈도우(다음 이름 출현 전까지)에서 지역/등록일을 추출. 동명(성씨+한자) 레코드
+    는 페이지 내에서 합친다(페이지 간 중복제거는 호출자가 수행).
+    """
+    text = _to_text(html)
     recs: list[Participant] = []
-    cur: Participant | None = None
-    for line in lines:
-        m = NAME_RE.search(line)
-        if m and (line.startswith(m.group(0)) or len(line) <= len(m.group(0)) + 4):
-            if cur:
-                recs.append(cur)
-            cur = Participant(name_kr=m.group(1), name_hanja=m.group(2))
-            continue
-        if cur is None:
-            continue
-        if DATE_RE.search(line):
-            cur.registered = DATE_RE.search(line).group(1)
-        elif "참여지역" in line:
-            cur.region = line.split("참여지역")[-1].replace(":", "").strip()
-        elif REGION_RE.match(line.strip()):
-            cur.region = line.strip()
+    seen: set[tuple[str, str]] = set()
+    matches = list(NAME_RE.finditer(text))
+    for i, m in enumerate(matches):
+        nxt = matches[i + 1].start() if i + 1 < len(matches) else m.end() + 300
+        window = text[m.end(): nxt]
+        name_kr, name_hanja = m.group(1), (m.group(2) or m.group(3))
+        region = ""
+        reg = re.search(r"참여지역[:\s]*([가-힣]+(?:도|시|군)\s*[가-힣]+)", window)
+        if reg:
+            region = reg.group(1)
         else:
-            cur.content = (cur.content + " " + line).strip()
-    if cur:
-        recs.append(cur)
+            reg2 = REGION_RE.search(window)
+            if reg2:
+                region = reg2.group(0)
+        d = DATE_RE.search(window)
+        registered = d.group(1) if d else ""
+        key = (name_kr, name_hanja)
+        if key in seen:
+            continue
+        seen.add(key)
+        recs.append(Participant(name_kr, name_hanja, region, window.strip(), registered))
     return recs
 
 
@@ -130,7 +157,7 @@ def fetch_page(surname: str, pno: int, cache_dir: str, use_cache: bool = True) -
             return f.read()
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with _open(req, 20) as resp:
             html = resp.read().decode("utf-8", "ignore")
     except Exception as e:  # network / timeout
         raise RuntimeError(f"페이지 {pno} 다운로드 실패: {e}")
@@ -193,12 +220,12 @@ def main(argv=None):
     region_filters: list[str] = []
     if args.region:
         region_filters = [args.region]
-    elif args.clan and preset.get("region_keywords"):
-        region_filters = preset["region_keywords"]
 
     cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
     total_pages, _ = probe_scale(surname, cache_dir)
     print(f"[규모] 성씨 '{surname}': 총 {total_pages}페이지", file=sys.stderr)
+    if not region_filters and preset.get("scale") == "common":
+        print("[안내] 대규모 성씨입니다 — --region 으로 범위를 좁히면 빠르고 정확합니다.", file=sys.stderr)
 
     limit = args.pages if args.pages > 0 else total_pages
     all_recs: list[Participant] = []
@@ -211,6 +238,16 @@ def main(argv=None):
         all_recs.extend(extract_records(html))
         print(f"[진행] page {p}/{limit} ({len(all_recs)}건)", file=sys.stderr)
 
+    all_recs = [r for r in all_recs if r.name_kr.startswith(surname)]
+    seen_g: set[tuple[str, str]] = set()
+    dedup: list[Participant] = []
+    for r in all_recs:
+        k = (r.name_kr, r.name_hanja)
+        if k in seen_g:
+            continue
+        seen_g.add(k)
+        dedup.append(r)
+    all_recs = dedup
     if region_filters or args.branch:
         recs = filter_records(all_recs, region_filters, args.branch)
     else:

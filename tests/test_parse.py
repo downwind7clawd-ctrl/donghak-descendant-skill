@@ -30,6 +30,12 @@ class TestParse(unittest.TestCase):
         jeolla = filter_records(recs, ["전라"], None)
         self.assertEqual(len(jeolla), 1)
 
+    def test_surname_filter(self):
+        recs = extract_records(HTML)
+        baek = [r for r in recs if r.name_kr.startswith("백")]
+        self.assertEqual(len(baek), 2)
+        self.assertNotIn("김이순", [r.name_kr for r in baek])
+
 
 class TestFetch(unittest.TestCase):
     def test_cache_used(self):
