@@ -1,0 +1,23 @@
+{
+  "수원백씨": {
+    "surname": "백",
+    "region_keywords": ["거창", "경남", "경상", "함안", "합천", "산청", "창녕", "의령", "밀양", "거제", "통영", "고성", "남해", "하동", "진주"],
+    "generations": ["남", "기", "규", "형", "흠", "인", "낙", "창"],
+    "scale": "rare"
+  },
+  "경주이씨": {
+    "surname": "이",
+    "region_keywords": ["경주", "성주", "경상", "영남"],
+    "scale": "common"
+  },
+  "김해김씨": {
+    "surname": "김",
+    "region_keywords": ["김해", "밀양", "경남"],
+    "scale": "common"
+  },
+  "초계변씨": {
+    "surname": "변",
+    "region_keywords": ["초계", "거창", "경남"],
+    "scale": "mid"
+  }
+}
