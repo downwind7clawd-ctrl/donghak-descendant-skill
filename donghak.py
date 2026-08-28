@@ -96,6 +96,7 @@ class Participant:
     registered: str = ""
     generation: str = ""        # 항렬 자 (라인 변경 시 채워짐)
     gen_index: int | None = None  # 항렬 순번 (세대 배열용)
+    gen_abs: int | None = None    # 절대 세대(예: 경주이씨 대동항렬 39세)
     source: str = "DB"          # "DB" | "문헌"
 
 
@@ -214,19 +215,97 @@ def load_lineage(clan: str) -> dict:
         data = json.load(f).get(clan, {})
     return {
         "generations": data.get("generations", []),
+        "gen_start": data.get("gen_start", 1),
         "branches": data.get("branches", {}),
         "lineage_note": data.get("lineage_note", ""),
     }
 
 
-def annotate_generation(records, generations):
-    """이름에 항렬 자가 포함되면 세대(gen_index)를 배정한다."""
-    gen_index = {g: i for i, g in enumerate(generations)} if generations else {}
+def build_gen_map(generations, gen_start):
+    """항렬 자 → [(리스트인덱, 절대세대), ...] 매핑. 같은 자가 여러 세대에 반복될 수 있음."""
+    m: dict[str, list] = {}
+    for i, item in enumerate(generations):
+        chars = item if isinstance(item, list) else list(item)
+        for c in chars:
+            m.setdefault(c, []).append((i, gen_start + i))
+    return m
+
+
+def annotate_generation(records, generations, gen_start=1):
+    """이름(성 제외)에 항렬 자가 포함되면 세대를 배정한다."""
+    gmap = build_gen_map(generations, gen_start) if generations else {}
     for r in records:
-        hit = next((g for g in generations if g and g in r.name_kr), None) if generations else None
+        hit = None
+        gi = ga = None
+        for c in r.name_kr[1:]:
+            if c in gmap:
+                hit = c
+                gi, ga = gmap[c][0]
+                break
         r.generation = hit or ""
-        r.gen_index = gen_index.get(hit) if hit else None
+        r.gen_index = gi
+        r.gen_abs = ga
     return records
+
+
+def _edit_distance(a: str, b: str) -> int:
+    """한글 1음절 단위 레벤슈타인 거리 (짧은 이름용)."""
+    if a == b:
+        return 0
+    la, lb = len(a), len(b)
+    dp = list(range(lb + 1))
+    for i in range(1, la + 1):
+        prev = dp[0]
+        dp[0] = i
+        for j in range(1, lb + 1):
+            cur = dp[j]
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            dp[j] = min(dp[j] + 1, dp[j - 1] + 1, prev + cost)
+            prev = cur
+    return dp[lb]
+
+
+def participant_band(birth_year: int, base: int = 1880, interval: int = 30, spread: int = 4):
+    """앵커 출생년도 → 참여자(1894 운동 시 성년, 출생 추정 ~1880)의 절대 세대 밴드 추정.
+
+    앵커와 참여자 사이 세대 간격(gen_gap)도 함께 반환.
+    base=1880: 참여자 출생 추정년(1894 운동 당시 성년 기준).
+    """
+    gen_gap = max(1, round((birth_year - base) / interval))
+    center = 40  # 1894년 전후 참여자가 사용한 경주이씨 대동항렬 세대 중심(문헌: 37~44세)
+    return [center - spread, center + spread], gen_gap
+
+
+KINSHIP = {1: "아버지", 2: "할아버지", 3: "증조할아버지", 4: "고조할아버지", 5: "5대 조상"}
+
+
+def score_candidates(recs, gmap, band, region, ancestor):
+    """DB 후보를 (항렬 세대 부합 + 연고지 + 조상실명 유사도)로 점수화.
+
+    반환: [(점수, 레코드, 근거리스트), ...] 내림차순. 점수는 '상대적 가능성' 지표.
+    """
+    scored = []
+    for r in recs:
+        s = 0
+        reasons = []
+        if region and region in r.region:
+            s += 3
+            reasons.append("연고지 일치")
+        if r.generation and gmap.get(r.generation):
+            in_band = [g for _, g in gmap[r.generation] if band[0] <= g <= band[1]]
+            if in_band:
+                s += 2
+                reasons.append(f"항렬 세대({in_band[0]}세)가 참여자 시기({band[0]}~{band[1]}세) 부합")
+        if ancestor:
+            d = _edit_distance(ancestor, r.name_kr)
+            if d <= 2:
+                s += (3 - d)
+                reasons.append(f"조상실명({ancestor})과 편집거리 {d}")
+        if not reasons:
+            reasons.append("연고/항렬/실명 근거 없음")
+        scored.append((s, r, reasons))
+    scored.sort(key=lambda x: -x[0])
+    return scored
 
 
 def group_by_generation(records, generations):
@@ -335,7 +414,8 @@ def load_clan(key: str) -> dict:
 
 
 def build_report(surname, total_pages, processed, recs, matched, filters,
-                 generations=None, lineage_note="", lit_only=None):
+                 generations=None, lineage_note="", lit_only=None,
+                 ranked=None, birth_year=None, gen_gap=None, anchor_label=None):
     lines = []
     lines.append("=== 동학농민혁명 참여자 조사 보고서 ===")
     lines.append(f"성씨: {surname}")
@@ -367,6 +447,19 @@ def build_report(surname, total_pages, processed, recs, matched, filters,
         for r in lit_only:
             lines.append(f"- {r.name_kr}({r.name_hanja}) [{r.source}]")
         lines.append("  ※ 이들은 미등록 참여자일 가능성 — 종중/기념재단 교차검증 권장")
+    if ranked is not None:
+        lines.append("")
+        lines.append("--- 세대 역산 + 가능성 순위 (상대 점수) ---")
+        if birth_year and gen_gap is not None:
+            who = anchor_label or f"조회자({birth_year})"
+            kin = KINSHIP.get(gen_gap, f"{gen_gap}대 위")
+            lines.append(f"  {who} 기준 → 참여자는 약 {gen_gap}대 위({kin} 세대) 가능성")
+        for s, r, reasons in ranked[:10]:
+            disp = r.name_kr if r.name_kr else r.name_hanja
+            han = f"({r.name_hanja})" if r.name_kr else ""
+            gen = f" {r.generation}({r.gen_abs}세)" if r.generation else ""
+            lines.append(f"  [{s}점] {disp}{han}{gen} | {r.region} | 이유: {', '.join(reasons)}")
+        lines.append("  ※ 점수는 항렬 세대부합+연고지+실명유사도의 상대지표. '확정' 아님.")
     lines.append("")
     lines.append("권장 다음단계: 1)부모님께 실명 확인 2)종중 족보 문의 3)기념재단(063-530-9434) 역조사/유족등록")
     return "\n".join(lines)
@@ -388,6 +481,9 @@ def main(argv=None):
     ap.add_argument("--lit", help="로컬 문헌/논문 코퍼스 폴더 (미등록 후보 추가 발굴)")
     ap.add_argument("--web", action="store_true", help="웹 학술검색 사용(.env DONGHAK_LIT_API_URL/KEY 필요)")
     ap.add_argument("--guide", action="store_true", help="사용자용 시작 체크리스트 출력")
+    ap.add_argument("--birth-year", type=int, help="조회자 출생년도 (세대 역산·가능성 순위용)")
+    ap.add_argument("--ancestor-birth-year", type=int, help="조상(--ancestor) 출생년도 (세대 앵커로 쓰면 더 타이트)")
+    ap.add_argument("--gen-interval", type=int, default=30, help="세대 간 연수 (기본 30)")
     args = ap.parse_args(argv)
 
     if args.guide:
@@ -443,8 +539,9 @@ def main(argv=None):
     # A. 항렬/종파: 이름에 항렬 자가 있으면 세대 배정
     lineage = load_lineage(args.clan) if args.clan else {}
     generations = lineage.get("generations", [])
+    gen_start = lineage.get("gen_start", 1)
     lineage_note = lineage.get("lineage_note", "")
-    annotate_generation(all_recs, generations)
+    annotate_generation(all_recs, generations, gen_start)
 
     # B. 문헌/논문: 로컬 코퍼스 + 선택 웹 → 공식DB에 없는 후보 발굴
     extra_recs: list[Participant] = []
@@ -464,10 +561,31 @@ def main(argv=None):
         recs = all_recs
     matched = match_ancestor(all_recs, args.ancestor) if args.ancestor else []
 
+    # 세대 역산 + 가능성 순위 (조회자 출생년도 + clan 항렬표 있으면)
+    ranked = None
+    gen_gap = None
+    anchor_label = None
+    if args.birth_year and generations:
+        # 앵커: 조상 출생년도가 있으면 그것을 기준(더 타이트), 없으면 조회자 본인
+        anchor = args.ancestor_birth_year or args.birth_year
+        interval = args.gen_interval
+        if args.birth_year and args.ancestor_birth_year:
+            # 두 세대 생년 차이로 실제 세대 간격 추정 (아버지-자식 = 1세대)
+            interval = max(1, args.birth_year - args.ancestor_birth_year)
+        band, gen_gap = participant_band(anchor, interval=interval)
+        gmap = build_gen_map(generations, gen_start)
+        ranked = score_candidates(recs, gmap, band, args.region, args.ancestor)
+        if args.ancestor_birth_year:
+            anchor_label = f"이상만({args.ancestor_birth_year})"
+        else:
+            anchor_label = f"조회자({args.birth_year})"
+
     report = build_report(
         surname, total_pages, min(limit, total_pages), recs, matched,
         region_filters + ([args.branch] if args.branch else []),
         generations=generations, lineage_note=lineage_note, lit_only=lit_only,
+        ranked=ranked, birth_year=args.birth_year, gen_gap=gen_gap,
+        anchor_label=anchor_label,
     )
     if args.json:
         out = json.dumps([asdict(r) for r in recs], ensure_ascii=False, indent=2)

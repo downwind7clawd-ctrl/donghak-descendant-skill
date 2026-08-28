@@ -89,9 +89,10 @@ python3 -m venv .venv        # 격리 (외부 의존성 0개)
 
 - `--clan <키>` 로 해당 본관의 항렬 데이터를 로드합니다.
 - `branches`(파 트리)는 `clans.json` 에 구조로 보관되며, 종중 족보 검증용 참고자료로 씁니다.
-- ⚠ **데이터 정직성**: `clans.json` 의 `generations` 는 **예시(미확정)** 입니다. 실제
-  수원백씨 항렬 순환표는 종중 족보에서 확인 후 교체해야 합니다. (다비드 33세 형/亨 돌림은
-  본인 확인됨) 비어 있으면 해당 섹션은 표시되지 않습니다.
+- ⚠ **데이터 정직성**: 한국 성씨·파는 수천 종류라 중앙 항렬 DB가 없습니다. **에이전트가
+  본관 제시 시 직접 웹/문헌을 검색해 항렬 순환표를 `clans.json` 에 채웁니다**(예: 경주이씨는
+  대동항렬 35~70세를 웹 참고로 수집 — 종중 족보 확정 권장). 검색 불가 시 `generations: []` 로
+  두고 정직 안내. 비어 있으면 항렬 섹션/세대 역산은 skip.
 
 ---
 
@@ -135,8 +136,14 @@ python donghak.py --surname 백 --ancestor 백도홍
 # 기계 가독 출력
 python donghak.py --clan 수원백씨 --region 거창 --json
 
-# 항렬 섹션 포함 (수원백씨 프리셋)
+# 항렬 세대 배열 포함 (수원백씨 프리셋)
 python donghak.py --surname 백 --clan 수원백씨
+
+# 세대 역산 + 가능성 순위 (조회자 출생년도 + clan 항렬표 필요)
+python donghak.py --clan 경주이씨 --region 아산 --birth-year 1981 --ancestor 이상만
+
+# 조상 출생년도까지 있으면 → 조상 기준 세대 앵커로 더 타이트하게
+python donghak.py --clan 경주이씨 --region 아산 --birth-year 1981 --ancestor-birth-year 1946 --ancestor 이상만
 
 # 문헌 코퍼스에서 미등록 후보 발굴
 python donghak.py --surname 백 --lit ./corpus
