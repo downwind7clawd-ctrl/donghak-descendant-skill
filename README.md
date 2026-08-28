@@ -56,6 +56,7 @@ python3 -m venv .venv        # 격리 (외부 의존성 0개)
 | `--pages` | ❌ | 최대 처리 페이지 (0=전체). 상한 도달 시 커버리지 경고 |
 | `--lit` | ❌ | 로컬 문헌/논문 코퍼스 폴더 (미등록 후보 추가 발굴) |
 | `--web` | ❌ | 웹 학술검색 사용 (`.env` 의 `DONGHAK_LIT_API_URL`+`KEY` 필요) |
+| `--guide` | ❌ | 사용자용 시작 체크리스트 출력 (막연할 때 먼저 보여줄 것) |
 | `--json` | ❌ | JSON 출력 |
 | `--csv` | ❌ | CSV 출력 |
 | `--out` | ❌ | 결과 파일 저장 경로 |
@@ -110,6 +111,15 @@ python3 -m venv .venv        # 격리 (외부 의존성 0개)
 
 ---
 
+## 5.7 사용자용: 시작점이 막연할 때
+
+`python donghak.py --guide` 로 **시작 체크리스트**를 출력하세요. 에이전트는 조회 전에
+반드시 이 체크리스트 항목(성씨·본관·지역·조상 실명·항렬·문헌)을 사용자에게 먼저
+요구하고, 답변을 받은 뒤에야 검색을 실행합니다. 모르는 항목은 "모름"으로 받아도 되며,
+이후 가족(부모님) 확인 단계로 안내합니다.
+
+---
+
 ## 6. 실행 예시
 
 ```bash
@@ -131,6 +141,9 @@ python donghak.py --surname 백 --clan 수원백씨
 # 문헌 코퍼스에서 미등록 후보 발굴
 python donghak.py --surname 백 --lit ./corpus
 python donghak_lit.py --corpus ./corpus --surname 백   # 독립 CLI
+
+# 시작이 막연하면 체크리스트부터
+python donghak.py --guide
 ```
 
 ---

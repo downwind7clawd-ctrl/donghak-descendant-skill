@@ -27,6 +27,30 @@ BASE_URL = "https://cdpr.go.kr/commit/"
 SEARCH_TMPL = "?menu=231&sf=all&sv={sv}&pno={pno}"
 UA = "Mozilla/5.0 (compatible; donghak-skill/1.0)"
 
+GUIDE = """=== 동학 참여자 후손 찾기 — 시작 체크리스트 ===
+막연하시다면 아래 순서로 준비하세요. 준비된 항목을 에이전트에 알려주시면
+알맞은 조회 명령을 실행해 참여자와의 연결고리를 찾습니다.
+
+1. 성씨 (필수): 백 / 이 / 김 / 변 등 — 어느 성씨 조상인가요?
+2. 본관·파: 수원백씨 정신재공파 등 (모르면 '모름'이라도 OK)
+3. 집성촌·연고 지역: 거창 도평리, 김해 등 — 가문이 뿌리내린 곳
+4. 조상 실명: 부모님/가족이 아는 조상 이름 (있으면 바로 정확 매칭)
+5. 항렬(돌림): 형(亨) 등 — 같은 항렬선 후보를 세대순으로 배열
+6. 문헌/족보 파일: 컴퓨터에 있는 논문·족보 txt/html 경로 (있으면 미등록 후보 발굴)
+
+--- 권장 흐름 ---
+① 가족(부모님)께 조상 실명·본관·항렬 물어보기
+② 위 항목을 에이전트에 전달 → DB 전수 조회
+③ 논문/족보(--lit)로 미등록 참여자 교차검증
+④ 기념재단(063-530-9434) 역조사 / 유족 등록 가능성 확인
+
+⚠ 정직: 명부 DB는 성씨+이름+지역만 보유 → "후보 제시 + 교차검증"이 목적.
+  "후손 확정"은 자동 주장하지 않습니다."""
+
+
+def print_guide():
+    print(GUIDE)
+
 NAME_RE = re.compile(
     r"(?<![가-힣])([가-힣]+)(?:\(([가-힣\u4e00-\u9fff]+)\)|\s+([\u4e00-\u9fff]+))"
 )
@@ -326,7 +350,12 @@ def main(argv=None):
     ap.add_argument("--no-cache", action="store_true", help="캐시 미사용(항상 재다운로드)")
     ap.add_argument("--lit", help="로컬 문헌/논문 코퍼스 폴더 (미등록 후보 추가 발굴)")
     ap.add_argument("--web", action="store_true", help="웹 학술검색 사용(.env DONGHAK_LIT_API_URL/KEY 필요)")
+    ap.add_argument("--guide", action="store_true", help="사용자용 시작 체크리스트 출력")
     args = ap.parse_args(argv)
+
+    if args.guide:
+        print_guide()
+        return
 
     preset = load_clan(args.clan) if args.clan else {}
     surname = args.surname or preset.get("surname")
