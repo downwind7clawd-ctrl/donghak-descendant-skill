@@ -83,7 +83,7 @@ class TestFetch(unittest.TestCase):
     def test_cache_used(self):
         d = tempfile.mkdtemp()
         try:
-            p = os.path.join(d, "page_1.html")
+            p = os.path.join(d, "page_%EB%B0%B1_1.html")
             with open(os.path.join(HERE, "sample_page.html"), encoding="utf-8") as f:
                 src = f.read()
             with open(p, "w", encoding="utf-8") as f:

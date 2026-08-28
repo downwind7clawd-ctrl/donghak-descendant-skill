@@ -52,8 +52,19 @@ def print_guide():
     print(GUIDE)
 
 NAME_RE = re.compile(
-    r"(?<![가-힣])([가-힣]+)(?:\(([가-힣\u4e00-\u9fff]+)\)|\s+([\u4e00-\u9fff]+))"
+    r"(?<![가-힣])([가-힣]{2,4})(?:\(([가-힣\u4e00-\u9fff]{1,5})\)|\s*([\u4e00-\u9fff]{1,5}))"
 )
+
+# 흔한 성씨의 한자 표기. DB가 한자형으로만 저장된 레코드(예: 백씨 '白道弘')를
+# 잡기 위해, 대상 성씨의 한자로 시작하는 한자 이름을 보완 추출한다.
+SURNAME_HANJA = {
+    "백": "白", "이": "李", "김": "金", "변": "邊", "박": "朴", "최": "崔",
+    "정": "鄭", "강": "姜", "조": "趙", "윤": "尹", "장": "張", "임": "林",
+    "한": "韓", "오": "吳", "서": "徐", "신": "申", "권": "權", "황": "黃",
+    "안": "安", "송": "宋", "유": "柳", "류": "柳", "홍": "洪", "전": "全",
+    "고": "高", "문": "文", "양": "梁", "손": "孫", "심": "沈", "허": "許",
+    "남": "南", "배": "裵", "석": "石", "윤": "尹", "구": "具", "차": "車",
+}
 PNO_RE = re.compile(r"pno=(\d+)")
 DATE_RE = re.compile(r"(\d{4}[-.]\d{2}[-.]\d{2})")
 REGION_RE = re.compile(r"^[가-힣]+도\s*[가-힣]*$")
@@ -118,16 +129,19 @@ def _to_text(html: str) -> str:
     return "\n".join(p.get_lines())
 
 
-def extract_records(html: str) -> list[Participant]:
+def extract_records(html: str, surname_hanja: str | None = None) -> list[Participant]:
     """HTML 본문에서 참여자 레코드를 추출한다.
 
     이름 패턴(한글명(한자명))을 전체 텍스트에 대해 찾고, 각 이름 뒤 컨텍스트
     윈도우(다음 이름 출현 전까지)에서 지역/등록일을 추출. 동명(성씨+한자) 레코드
     는 페이지 내에서 합친다(페이지 간 중복제거는 호출자가 수행).
+
+    surname_hanja 가 주어지면, DB가 한자형으로만 저장된 레코드(예: '白道弘')를
+    잡기 위해 해당 한자로 시작하는 한자 이름도 보완 추출한다.
     """
     text = _to_text(html)
     recs: list[Participant] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set = set()
     matches = list(NAME_RE.finditer(text))
     for i, m in enumerate(matches):
         nxt = matches[i + 1].start() if i + 1 < len(matches) else m.end() + 300
@@ -148,6 +162,26 @@ def extract_records(html: str) -> list[Participant]:
             continue
         seen.add(key)
         recs.append(Participant(name_kr, name_hanja, region, window.strip(), registered))
+
+    if surname_hanja:
+        hre = re.compile(r"(?<![\u4e00-\u9fff])" + re.escape(surname_hanja) + r"[\u4e00-\u9fff]{1,4}")
+        for m in hre.finditer(text):
+            hanja = m.group(0)
+            if hanja in seen:
+                continue
+            window = text[m.end(): m.end() + 300]
+            region = ""
+            reg = re.search(r"참여지역[:\s]*([가-힣]+(?:도|시|군)\s*[가-힣]+)", window)
+            if reg:
+                region = reg.group(1)
+            else:
+                reg2 = REGION_RE.search(window)
+                if reg2:
+                    region = reg2.group(0)
+            d = DATE_RE.search(window)
+            registered = d.group(1) if d else ""
+            seen.add(hanja)
+            recs.append(Participant("", hanja, region, window.strip(), registered))
     return recs
 
 
@@ -267,11 +301,12 @@ def web_query(surname: str) -> list[Participant]:
     return recs
 
 
-def fetch_page(surname: str, pno: int, cache_dir: str, use_cache: bool = True) -> str:
-    sv = urllib.parse.quote(surname)
-    url = BASE_URL + SEARCH_TMPL.format(sv=sv, pno=pno)
+def fetch_page(sv: str, pno: int, cache_dir: str, use_cache: bool = True) -> str:
+    """sv: 실제 검색어(성씨 한글 또는 한자). 캐시는 sv+pno 별로 구분."""
+    q = urllib.parse.quote(sv)
+    url = BASE_URL + SEARCH_TMPL.format(sv=q, pno=pno)
     os.makedirs(cache_dir, exist_ok=True)
-    path = os.path.join(cache_dir, f"page_{pno}.html")
+    path = os.path.join(cache_dir, f"page_{urllib.parse.quote(sv, safe='')}_{pno}.html")
     if use_cache and os.path.exists(path):
         with open(path, encoding="utf-8", errors="ignore") as f:
             return f.read()
@@ -286,9 +321,9 @@ def fetch_page(surname: str, pno: int, cache_dir: str, use_cache: bool = True) -
     return html
 
 
-def probe_scale(surname: str, cache_dir: str) -> tuple[int, int]:
+def probe_scale(sv: str, cache_dir: str) -> tuple[int, int]:
     """pno=1 조회 → (총페이지, 추출레코드수)."""
-    html = fetch_page(surname, 1, cache_dir)
+    html = fetch_page(sv, 1, cache_dir)
     pages = detect_total_pages(html)
     return pages, len(extract_records(html))
 
@@ -312,7 +347,9 @@ def build_report(surname, total_pages, processed, recs, matched, filters,
         lines.append(f"적용 필터: {', '.join(filters)}")
     for r in recs:
         gen = f" [{r.generation}]" if r.generation else ""
-        lines.append(f"- {r.name_kr}({r.name_hanja}){gen} | {r.region} | {r.registered}")
+        disp = r.name_kr if r.name_kr else r.name_hanja
+        han = f"({r.name_hanja})" if r.name_kr else ""
+        lines.append(f"- {disp}{han}{gen} | {r.region} | {r.registered}")
     if matched:
         lines.append(f"★ 조상 매칭 후보: {', '.join(r.name_kr for r in matched)}")
     if generations:
@@ -361,32 +398,42 @@ def main(argv=None):
     surname = args.surname or preset.get("surname")
     if not surname:
         ap.error("--surname 또는 --clan 이 필요합니다")
+    surname_hanja = SURNAME_HANJA.get(surname)
     region_filters: list[str] = []
     if args.region:
         region_filters = [args.region]
 
     cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
-    total_pages, _ = probe_scale(surname, cache_dir)
-    print(f"[규모] 성씨 '{surname}': 총 {total_pages}페이지", file=sys.stderr)
+    # 한글 성씨 + 한자 성씨 둘 다 조회(사이트가 한자형으로만 저장한 레코드 대비)
+    queries = [surname]
+    if surname_hanja:
+        queries.append(surname_hanja)
+    total_pages = max(probe_scale(q, cache_dir)[0] for q in queries)
+    print(f"[규모] 성씨 '{surname}'({surname_hanja or '-'}): 총 {total_pages}페이지", file=sys.stderr)
     if not region_filters and preset.get("scale") == "common":
         print("[안내] 대규모 성씨입니다 — --region 으로 범위를 좁히면 빠르고 정확합니다.", file=sys.stderr)
 
     limit = args.pages if args.pages > 0 else total_pages
     all_recs: list[Participant] = []
     for p in range(1, limit + 1):
-        try:
-            html = fetch_page(surname, p, cache_dir, use_cache=not args.no_cache)
-        except RuntimeError as e:
-            print(f"[경고] {e}", file=sys.stderr)
-            break
-        all_recs.extend(extract_records(html))
+        for q in queries:
+            try:
+                html = fetch_page(q, p, cache_dir, use_cache=not args.no_cache)
+            except RuntimeError as e:
+                print(f"[경고] {e}", file=sys.stderr)
+                break
+            all_recs.extend(extract_records(html, surname_hanja))
         print(f"[진행] page {p}/{limit} ({len(all_recs)}건)", file=sys.stderr)
 
-    all_recs = [r for r in all_recs if r.name_kr.startswith(surname)]
+    all_recs = [
+        r for r in all_recs
+        if r.name_kr.startswith(surname)
+        or (surname_hanja and r.name_hanja.startswith(surname_hanja))
+    ]
     seen_g: set[tuple[str, str]] = set()
     dedup: list[Participant] = []
     for r in all_recs:
-        k = (r.name_kr, r.name_hanja)
+        k = r.name_hanja or r.name_kr
         if k in seen_g:
             continue
         seen_g.add(k)
