@@ -547,3 +547,13 @@ git commit -m "test: 라이브 E2E 사후 테스트 결과 기록"
 1. **Spec coverage:** §2 범용성(제로의존 CLI+SKILL.md)→Task2/4/5. §3 격리환경(venv/gitignore)→이미 초기화+Task5 문서. §4 CLI→Task4. §5 데이터흐름(규모탐지→순차→필터→보고서)→Task3/4. §6 파싱→Task2. §7 에러처리→Task3 fetch 재시도/경고. §8 테스트→Task1/3/6. §9 문서→Task5. §10 GitHub→구현 후 push(사용자 확인). §11 한계→SKILL.md/README. 모두 태스크 매핑됨.
 2. **Placeholder scan:** 샘플 코드 모두 실제 내용 포함. "TBD/유사하게" 없음.
 3. **Type consistency:** `Participant`(Task2 정의, Task4에서 `asdict(r)`/`match_ancestor` 재사용), `extract_records`/`detect_total_pages`/`filter_records` 시그니처 Task1~4 일관. `fetch_page(surname,pno,cache_dir,use_cache)` Task3 정의→Task4 호출 일치.
+
+---
+
+## 2026-08-28 추가 변경 (D 확장 — 설계 스펙 §Phase 2.5/2.6 반영)
+
+- **세대 역산 엔진**: `--birth-year`(조회자) + `--ancestor-birth-year`(조상 앵커) 추가. `participant_band()`가 1894 전후 참여자 출생 추정(~1880) 기준으로 gen_gap(세대 수)과 항렬 밴드(36~44세) 산출. `score_candidates()`가 (항렬 부합+연고지+실명유사도)로 점수화.
+- **항렬 데이터 자가수집**: 중앙 항렬 DB 부재 → `--clan` 제시 시 에이전트가 웹/문헌 검색해 `clans.json` 에 기록(SKILL.md 절차 명시). 경주이씨 대동항렬(35~70세) 수집 완료. 임의 날조 금지.
+- **항렬 점수 정보성 조정**: 혈통 근거 아님을 명시, 가중 +1로 하향(과대평가 방지).
+- **가족 확인 워크플로**: 증조할아버지 실명 모를 경우가 대부분 → 후보 나열 + "집안에서 아는 이름 있는지" 확인 안내를 보고서/SKILL.md/README 에 명시.
+- 구현 완료 및 공개 배포(commits 99a2fcd, 932a9e2, ecaccb4). 상세는 설계 스펙 §Phase 2.5/2.6 과 LOG/2026-08-28.md 참조.
