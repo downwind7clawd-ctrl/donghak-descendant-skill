@@ -580,7 +580,8 @@ def main(argv=None):
         gmap = build_gen_map(generations, gen_start)
         ranked = score_candidates(recs, gmap, band, args.region, args.ancestor)
         if args.ancestor_birth_year:
-            anchor_label = f"이상만({args.ancestor_birth_year})"
+            who = args.ancestor or "조상"
+            anchor_label = f"{who}({args.ancestor_birth_year})"
         else:
             anchor_label = f"조회자({args.birth_year})"
 

@@ -140,10 +140,10 @@ python donghak.py --clan 수원백씨 --region 거창 --json
 python donghak.py --surname 백 --clan 수원백씨
 
 # 세대 역산 + 가능성 순위 (조회자 출생년도 + clan 항렬표 필요)
-python donghak.py --clan 경주이씨 --region 아산 --birth-year 1981 --ancestor 이상만
+python donghak.py --clan 경주이씨 --region 아산 --birth-year 1981 --ancestor 이성호
 
 # 조상 출생년도까지 있으면 → 조상 기준 세대 앵커로 더 타이트하게
-python donghak.py --clan 경주이씨 --region 아산 --birth-year 1981 --ancestor-birth-year 1946 --ancestor 이상만
+python donghak.py --clan 경주이씨 --region 아산 --birth-year 1981 --ancestor-birth-year 1946 --ancestor 이성호
 
 # 문헌 코퍼스에서 미등록 후보 발굴
 python donghak.py --surname 백 --lit ./corpus

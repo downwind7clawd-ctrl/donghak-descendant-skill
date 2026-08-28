@@ -21,7 +21,7 @@ python donghak.py --clan 수원백씨 --region 거창
 python donghak.py --surname 김 --region 김해 --pages 50
 python donghak.py --surname 백 --ancestor 백도홍
 python donghak.py --surname 백 --clan 수원백씨        # 항렬 세대 배열 포함
-python donghak.py --clan 경주이씨 --region 아산 --birth-year 1981 --ancestor-birth-year 1946 --ancestor 이상만  # 세대 역산(이상만 앵커)+가능성 순위
+python donghak.py --clan 경주이씨 --region 아산 --birth-year 1981 --ancestor-birth-year 1946 --ancestor 이성호  # 세대 역산(조상 앵커)+가능성 순위
 python donghak.py --surname 백 --lit ./corpus         # 문헌에서 미등록 후보 발굴
 python donghak_lit.py --corpus ./corpus --surname 백  # 문헌 전용 독립 CLI
 ```

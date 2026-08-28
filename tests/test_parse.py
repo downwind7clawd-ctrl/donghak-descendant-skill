@@ -84,19 +84,19 @@ class TestRanking(unittest.TestCase):
         annotate_generation(recs, self.GEN, self.GEN_START)
         gmap = build_gen_map(self.GEN, self.GEN_START)
         band, _ = participant_band(1981)
-        scored = score_candidates(recs, gmap, band, "아산", "이상만")
+        scored = score_candidates(recs, gmap, band, "아산", "이성호")
         self.assertEqual(scored[0][1].name_kr, "이상준")
         self.assertGreater(scored[0][0], scored[2][0])  # 이상준 > 이영도
 
     def test_participant_band_anchor(self):
-        # 이상만(1946) 앵커 → 참여자는 할아버지(2대 위) 세대
+        # 조상(1946) 앵커 → 참여자는 할아버지(2대 위) 세대
         band, gap = participant_band(1946)
         self.assertEqual(gap, 2)
         self.assertEqual(KINSHIP.get(gap), "할아버지")
         # 두 생년으로 간격 추정(35년)해도 2대 위 유지
         _, gap2 = participant_band(1946, interval=35)
         self.assertEqual(gap2, 2)
-        # 이주형(1981) 앵커 → 증조할아버지(3대 위)
+        # 조회자(1981) 앵커 → 증조할아버지(3대 위)
         _, gap3 = participant_band(1981)
         self.assertEqual(gap3, 3)
 
