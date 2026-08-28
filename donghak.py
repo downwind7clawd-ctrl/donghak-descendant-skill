@@ -462,6 +462,8 @@ def build_report(surname, total_pages, processed, recs, matched, filters,
             gen = f" {r.generation}({r.gen_abs}세)" if r.generation else ""
             lines.append(f"  [{s}점] {disp}{han}{gen} | {r.region} | 이유: {', '.join(reasons)}")
         lines.append("  ※ 점수는 항렬 세대부합+연고지+실명유사도의 상대지표. '확정' 아님.")
+        lines.append("  ※ 증조할아버지 실명을 모르는 경우가 많음 — 위 후보 중 집안(부모님/친척/족보)에서")
+        lines.append("    들은 적 있는 이름이 있는지 가족에게 확인하세요. 있으면 그 인물이 연결고리 후보.")
     lines.append("")
     lines.append("권장 다음단계: 1)부모님께 실명 확인 2)종중 족보 문의 3)기념재단(063-530-9434) 역조사/유족등록")
     return "\n".join(lines)
