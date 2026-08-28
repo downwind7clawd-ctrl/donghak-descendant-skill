@@ -294,8 +294,10 @@ def score_candidates(recs, gmap, band, region, ancestor):
         if r.generation and gmap.get(r.generation):
             in_band = [g for _, g in gmap[r.generation] if band[0] <= g <= band[1]]
             if in_band:
-                s += 2
-                reasons.append(f"항렬 세대({in_band[0]}세)가 참여자 시기({band[0]}~{band[1]}세) 부합")
+                s += 1
+                reasons.append(f"항렬 세대({in_band[0]}세)가 참여자 시기({band[0]}~{band[1]}세) 부합(참여자 자격 재확인 — 혈통 근거 아님)")
+            else:
+                reasons.append(f"항렬 세대({r.gen_abs}세)가 참여자 시기와 거리 있음(참여자 아닐 수 있음)")
         if ancestor:
             d = _edit_distance(ancestor, r.name_kr)
             if d <= 2:
